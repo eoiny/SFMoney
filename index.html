@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+<title>Friends</title>
+<style>
+
+body{
+  margin: 0;
+  padding: : 0;
+}
+
+  #container {
+    width: 960px;
+    margin: 0 auto;
+  }
+
+  #title {
+    font-family:Helvetica,sans-serif;
+    font-size: 22px; 
+    padding-bottom:4px;
+    padding-top:80px;
+  }
+
+  #subtitle {
+    font-family:Helvetica,sans-serif;
+    font-size: 16px; 
+  }
+
+  #cite { 
+    font-size: 14px; 
+    text-align: left;
+  }
+
+  a{
+    text-decoration:underline, italic;
+    font-style: italic;
+    font-weight: bold;
+    color:#000;
+  }
+
+  div.chart {
+     float: left;
+  } 
+
+  .counties {
+    fill: none;
+  }
+
+  .states {
+    fill: #fefbf7;
+    stroke: #ccc;
+    stroke-opacity: 1;
+    stroke-width: .85px;
+    stroke-linejoin: round;
+  }
+
+  .states :hover {
+    fill: orange;
+    stroke-width: 1.5px;
+  }
+
+  .q0-9 { fill:#f7fcf5; opacity:0.85}
+  .q1-9 { fill:#e5f5e0; opacity:0.85}
+  .q2-9 { fill:#c7e9c0; opacity:0.85}
+  .q3-9 { fill:#a1d99b; opacity:0.85}
+  .q4-9 { fill:#74c476; opacity:0.85}
+  .q5-9 { fill:#41ab5d; opacity:0.85}
+  .q6-9 { fill:#238b45; opacity:0.85}
+  .q7-9 { fill:#006d2c; opacity:0.85}
+  .q8-9 { fill:#00441b; opacity:0.85}
+
+  div.tooltip{
+   position:absolute;
+   text-align:center;
+   width:120px;
+   padding:10px;
+   font-size:10px;
+   font-family:Helvetica,sans-serif;
+   background:#ffffff;
+   pointer-events:none;
+   opacity:0;
+   border:1px solid #ccc;
+}
+
+ div.tooltip h3{
+  font-family:Helvetica,sans-serif;
+  text-align:center;
+  font-size:12px;
+  margin:0 0 10px 0;
+  border-bottom:2px solid #000;
+  padding-bottom:6px;
+  line-height:1.2em;
+}
+
+.legend circle {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: .7px;
+}
+
+.legend text {
+  fill: #777;
+  font: 8px sans-serif;
+  text-anchor: middle;
+}
+
+</style>
+<body>
+  <div id="container">
+  
+  <div id="title">
+   How are US contributions to Sinn Fhéin distributed?
+  </div>
+
+  <div id="subtitle">
+   The map below shows the distribution of just over $10.5 million raised by Friends of Sinn Féin in the US. Another $1.5 million was collected but had no state listed or was listed as being from outside the US.  
+  </div>
+
+  <div id="chart">
+  <div id = "tooltip" class = "tooltip">
+   <h3>
+     <div class = "info"></div>
+   </h3>
+     <div class = "content"></div>
+    <b><div class = "cash"></div></b>
+  </div>
+</div>
+
+
+<div id="cite">Source: <a href="http://www.irishtimes.com/news/politics/friends-of-sinn-f%C3%A9in-the-methodology-1.2126522">The Irish Times</a> - Chart by <a href="http://eol.as">eol.as</a>
+</div>
+
+</div>
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script>
+
+var width = 960,
+    height = 600;
+
+var rateById = d3.map();
+
+var colors = [0.005e6, 0.01e6, 0.05e6, 0.1e6, 0.2e6, 0.5e6, 1e6, 6e6];
+
+var quantize = d3.scale.threshold()
+    .domain(colors)
+    .range(d3.range(9).map(function(i) { return "q" + i + "-9"; }));
+
+var rScale = d3.scale.linear()
+    .domain([50000, 500000])
+    .range([10, 14]);
+
+var projection = d3.geo.albersUsa()
+    .scale(1100)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection);
+
+var svg = d3.select("#chart").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var g = svg.append("g");
+
+var tooltip = d3.select("#tooltip")
+    .style("opacity", 0);
+
+queue()
+    .defer(d3.json, "data/us.json")
+    .defer(d3.csv, "data/summ_list.csv", typeAndSet)
+    .await(ready);
+
+function ready(error, us) {
+  svg.append("g")
+      .attr("class", "states")
+    .selectAll("path")
+      .data(topojson.feature(us, us.objects.states).features)
+    .enter().append("path")
+      .attr("id",function(d) {return d.id})
+      .attr("d", path);
+
+svg.selectAll(".states path")
+      .attr("class", function(d) { 
+          if (rateById.get(d.id).total>0) {return quantize(rateById.get(d.id).total);}
+          else {return "state"}
+           })
+      .on("mouseover", mouseover)
+      .on("mouseout", mouseout);  
+
+var legend = svg.append("g")
+    .attr("class", "legend")
+    .attr("transform", "translate(" + (width - 190) + "," + (height - 20) + ")")
+    .append("text")
+    .attr("y", -4)
+    .attr("x", 3)
+    .text("$");
+
+    d3.select('.legend').selectAll('.legend')
+        .data(colors)
+        .enter()
+          .append('rect')
+            .attr("x", function(d, i) { return i*19; })
+            .attr('width', 19)
+            .attr('height', 10)
+            .attr('class', function(d){ return quantize(d); });
+
+    d3.select('.legend').selectAll('.legend').append("g")
+        .data(colors)
+        .enter()
+          .append('text')
+          .attr("x", function(d, i) { return (i*19)+10; })
+          .attr("y", -4)
+          .attr("class", "label")
+          .attr("text-anchor", "start")
+          .text(d3.format(".1s"));     
+}
+
+function typeAndSet(d) {
+    d.total = +d.total;
+    rateById.set(d.id, d);   
+}
+
+function mouseover(d){
+  tooltip.transition()        
+        .duration(200)      
+        .style("opacity", .9); 
+        
+        // Position tooltip
+               if (d3.event.pageX > (width - 200)) {
+                   tooltip.style("left", (d3.event.pageX - 170) + "px");
+               } else {
+                   tooltip.style("left", (d3.event.pageX + 30) + "px")
+                       .style("top", (d3.event.pageY -30) + "px");
+               }
+               
+               if (d3.event.pageY > (height - 150)) {
+                    tooltip.style("top", (d3.event.pageY - 100) + "px");
+               } else {
+                    tooltip.style("top", (d3.event.pageY - 40) + "px");
+               }
+
+        tooltip.select(".info").html(rateById.get(d.id).state+ "<br/>"); 
+        tooltip.select(".content").html("Total contributions: <br>");
+        tooltip.select(".cash").html(d3.format("$,")(rateById.get(d.id).total)+ "<br/>");    
+ }
+
+function mouseout(){
+  tooltip.transition()
+      .duration(500)
+      .style("opacity", 1e-6);
+ }
+
+</script>
+</body>
